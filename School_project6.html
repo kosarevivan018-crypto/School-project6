@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Цифровое расписание школы</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+
+        /* Вкладки */
+        .tabs { display: flex; background: #16213e; padding: 10px 10px 0 10px; gap: 5px; justify-content: center; flex-wrap: wrap; }
+        .tab-btn { padding: 12px 30px; background: #0f3460; color: white; border: none; border-radius: 10px 10px 0 0; cursor: pointer; font-size: 16px; font-weight: bold; transition: all 0.3s; }
+        .tab-btn.active { background: #e94560; }
+        .tab-btn:hover { background: #e94560; opacity: 0.9; }
+
+        /* Контент */
+        .tab-content { display: none; padding: 20px; animation: fadeIn 0.5s; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ========= СТИЛИ ТАБЛО ========= */
+        .display-panel {
+            background: #000; border: 4px solid #333; border-radius: 20px; padding: 40px; text-align: center;
+            max-width: 900px; margin: 20px auto; box-shadow: 0 0 50px rgba(233, 68, 96, 0.3);
+        }
+        .current-time { font-size: 72px; font-weight: bold; color: #ff4757; font-family: 'Courier New', monospace; letter-spacing: 5px; margin-bottom: 20px; }
+        .date-string { font-size: 24px; color: #aaa; margin-bottom: 30px; }
+        .lesson-info { background: #111; border-radius: 15px; padding: 30px; margin: 20px 0; }
+        .lesson-status { font-size: 28px; text-transform: uppercase; letter-spacing: 3px; color: #ffa502; margin-bottom: 10px; }
+        .lesson-subject { font-size: 56px; font-weight: bold; color: #fff; margin: 15px 0; }
+        .lesson-meta { font-size: 28px; color: #ccc; margin: 10px 0; }
+        .timer { font-size: 64px; font-weight: bold; font-family: 'Courier New', monospace; margin: 20px 0; padding: 15px; border-radius: 10px; display: inline-block; min-width: 300px; }
+        .timer.urgent { background: #ff4757; color: #fff; animation: pulse 1s infinite; }
+        .timer.normal { background: #2ed573; color: #000; }
+        .timer.break-timer { background: #ffa502; color: #000; }
+        .next-lesson { font-size: 32px; color: #aaa; margin-top: 20px; padding: 10px; border-top: 2px dashed #444; }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        /* ========= СТИЛИ НАСТРОЕК ========= */
+        .settings-panel { background: #16213e; border-radius: 15px; padding: 30px; max-width: 1100px; margin: 0 auto; }
+        .settings-panel h2 { text-align: center; color: #e94560; margin-bottom: 20px; }
+        .day-tabs { display: flex; gap: 5px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        .day-btn { padding: 10px 20px; background: #0f3460; color: white; border: 2px solid transparent; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .day-btn.active { background: #e94560; border-color: #fff; }
+
+        .schedule-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        .schedule-table th { background: #e94560; color: white; padding: 12px; font-size: 14px; }
+        .schedule-table td { padding: 8px; border: 1px solid #333; }
+        .schedule-table input { width: 100%; padding: 10px; background: #1a1a2e; border: 1px solid #444; color: white; border-radius: 5px; font-size: 14px; text-align: center; }
+        .schedule-table input:focus { outline: 2px solid #e94560; border-color: #e94560; }
+
+        .btn { padding: 12px 30px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin: 5px; transition: 0.3s; }
+        .btn-save { background: #2ed573; color: #000; }
+        .btn-save:hover { background: #7bed9f; }
+        .btn-reset { background: #ff4757; color: white; }
+        .btn-export { background: #1e90ff; color: white; }
+        .btn-import { background: #ffa502; color: #000; }
+        .status-msg { text-align: center; padding: 10px; margin: 10px 0; border-radius: 8px; font-weight: bold; }
+        .status-msg.success { background: #2ed57333; color: #2ed573; border: 1px solid #2ed573; }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .current-time { font-size: 40px; }
+            .lesson-subject { font-size: 32px; }
+            .timer { font-size: 36px; min-width: auto; }
+            .lesson-meta, .next-lesson { font-size: 18px; }
+            .display-panel { padding: 20px; }
+            .schedule-table input { font-size: 11px; padding: 6px; }
+        }
+
+        .fullscreen-btn {
+            position: fixed; bottom: 20px; right: 20px; background: #e94560; color: white; border: none; border-radius: 50%;
+            width: 50px; height: 50px; font-size: 24px; cursor: pointer; z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Навигация -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('display')">📺 Табло</button>
+        <button class="tab-btn" onclick="switchTab('settings')">⚙️ Настройки расписания</button>
+    </div>
+
+    <!-- ВКЛАДКА ТАБЛО -->
+    <div id="tab-display" class="tab-content active">
+        <div class="display-panel">
+            <div class="date-string" id="dateDisplay"></div>
+            <div class="current-time" id="timeDisplay"></div>
+            <div class="lesson-info">
+                <div class="lesson-status" id="statusDisplay">ЗАГРУЗКА...</div>
+                <div class="lesson-subject" id="subjectDisplay">---</div>
+                <div class="lesson-meta" id="metaDisplay"></div>
+                <div class="timer normal" id="timerDisplay">00:00</div>
+            </div>
+            <div class="next-lesson" id="nextDisplay"></div>
+        </div>
+        <button class="fullscreen-btn" onclick="toggleFullscreen()" title="На весь экран">⛶</button>
+    </div>
+
+    <!-- ВКЛАДКА НАСТРОЕК -->
+    <div id="tab-settings" class="tab-content">
+        <div class="settings-panel">
+            <h2>📝 Настройка расписания</h2>
+            <p style="text-align:center;color:#aaa;margin-bottom:15px;">Заполните расписание для каждого дня. Время вводится в формате ЧЧ:ММ</p>
+            
+            <!-- Выбор дня -->
+            <div class="day-tabs" id="dayTabs"></div>
+            
+            <!-- Таблица -->
+            <div style="overflow-x:auto;">
+                <table class="schedule-table" id="scheduleTable">
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Начало (ЧЧ:ММ)</th>
+                            <th>Конец (ЧЧ:ММ)</th>
+                            <th>Предмет</th>
+                            <th>Класс / Группа</th>
+                            <th>Учитель</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            
+            <!-- Кнопки -->
+            <div style="text-align:center;margin-top:20px;">
+                <button class="btn btn-save" onclick="saveSchedule()">💾 Сохранить расписание</button>
+                <button class="btn btn-export" onclick="exportSchedule()">📤 Экспорт в файл</button>
+                <button class="btn btn-import" onclick="document.getElementById('importFile').click()">📥 Импорт из файла</button>
+                <button class="btn btn-reset" onclick="resetSchedule()">🗑️ Сбросить всё</button>
+                <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importSchedule(event)">
+            </div>
+            <div id="statusMsg"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
+        const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const DAY_NAMES_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+        const DAY_NAMES_RU_SHORT = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
+
+        let currentDayIndex = 0; // для вкладки настроек
+        let scheduleData = {};   // все расписание
+
+        // Структура по умолчанию (8 уроков)
+        function getDefaultDay() {
+            return [
+                { start: '08:30', end: '09:15', subject: '', group: '', teacher: '' },
+                { start: '09:25', end: '10:10', subject: '', group: '', teacher: '' },
+                { start: '10:30', end: '11:15', subject: '', group: '', teacher: '' },
+                { start: '11:25', end: '12:10', subject: '', group: '', teacher: '' },
+                { start: '12:20', end: '13:05', subject: '', group: '', teacher: '' },
+                { start: '13:15', end: '14:00', subject: '', group: '', teacher: '' },
+                { start: '14:10', end: '14:55', subject: '', group: '', teacher: '' },
+                { start: '15:05', end: '15:50', subject: '', group: '', teacher: '' }
+            ];
+        }
+
+        // ============ ИНИЦИАЛИЗАЦИЯ ============
+        function init() {
+            loadScheduleFromStorage();
+            buildDayTabs();
+            renderTable();
+            updateDisplay();
+            setInterval(updateDisplay, 1000); // обновление табло каждую секунду
+        }
+
+        // ============ РАБОТА С ДАННЫМИ ============
+        function loadScheduleFromStorage() {
+            const saved = localStorage.getItem('schoolSchedule');
+            if (saved) {
+                try {
+                    scheduleData = JSON.parse(saved);
+                } catch(e) {
+                    scheduleData = {};
+                }
+            }
+            // Дополняем недостающие дни
+            DAYS.forEach(day => {
+                if (!scheduleData[day]) {
+                    scheduleData[day] = getDefaultDay();
+                }
+            });
+        }
+
+        function saveScheduleToStorage() {
+            localStorage.setItem('schoolSchedule', JSON.stringify(scheduleData));
+        }
+
+        // ============ ПОСТРОЕНИЕ ТАБЛИЦЫ НАСТРОЕК ============
+        function buildDayTabs() {
+            const container = document.getElementById('dayTabs');
+            container.innerHTML = '';
+            DAYS.forEach((day, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'day-btn' + (index === currentDayIndex ? ' active' : '');
+                btn.textContent = DAY_NAMES_RU[index];
+                btn.onclick = () => {
+                    currentDayIndex = index;
+                    document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderTable();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderTable() {
+            const day = DAYS[currentDayIndex];
+            const lessons = scheduleData[day] || getDefaultDay();
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            lessons.forEach((lesson, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="text-align:center;font-weight:bold;color:#e94560;">${i + 1}</td>
+                    <td><input type="time" value="${lesson.start}" data-index="${i}" data-field="start" onchange="updateField(this)"></td>
+                    <td><input type="time" value="${lesson.end}" data-index="${i}" data-field="end" onchange="updateField(this)"></td>
+                    <td><input type="text" value="${lesson.subject}" placeholder="Предмет" data-index="${i}" data-field="subject" onchange="updateField(this)"></td>
+                    <td><input type="text" value="${lesson.group}" placeholder="Класс" data-index="${i}" data-field="group" onchange="updateField(this)"></td>
+                    <td><input type="text" value="${lesson.teacher}" placeholder="Учитель" data-index="${i}" data-field="teacher" onchange="updateField(this)"></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateField(input) {
+            const index = parseInt(input.dataset.index);
+            const field = input.dataset.field;
+            const day = DAYS[currentDayIndex];
+            if (!scheduleData[day]) scheduleData[day] = getDefaultDay();
+            scheduleData[day][index][field] = input.value;
+            // Автосохранение при изменении
+            saveScheduleToStorage();
+            showStatus('Изменения сохранены автоматически ✅', 'success');
+        }
+
+        function saveSchedule() {
+            saveScheduleToStorage();
+            showStatus('✅ Расписание успешно сохранено! Можно переходить на вкладку "Табло".', 'success');
+        }
+
+        function resetSchedule() {
+            if (confirm('Точно очистить ВСЁ расписание? Восстановить будет нельзя!')) {
+                scheduleData = {};
+                DAYS.forEach(day => { scheduleData[day] = getDefaultDay(); });
+                saveScheduleToStorage();
+                renderTable();
+                showStatus('Расписание сброшено.', 'success');
+            }
+        }
+
+        function exportSchedule() {
+            const dataStr = JSON.stringify(scheduleData, null, 2);
+            const blob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'raspisanie_' + new Date().toISOString().slice(0,10) + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('📤 Файл скачан!', 'success');
+        }
+
+        function importSchedule(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    // простая валидация структуры
+                    if (typeof data === 'object') {
+                        scheduleData = data;
+                        saveScheduleToStorage();
+                        renderTable();
+                        showStatus('📥 Расписание импортировано!', 'success');
+                    } else {
+                        showStatus('❌ Неверный формат файла!', 'error');
+                    }
+                } catch(err) {
+                    showStatus('❌ Ошибка чтения файла!', 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('statusMsg');
+            el.textContent = msg;
+            el.className = 'status-msg ' + (type || 'success');
+            setTimeout(() => { el.textContent = ''; el.className = ''; }, 4000);
+        }
+
+        // ============ ЛОГИКА ТАБЛО ============
+        function updateDisplay() {
+            const now = new Date();
+            
+            // Обновляем дату и время
+            const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            document.getElementById('dateDisplay').textContent = dateStr;
+            
+            const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('timeDisplay').textContent = timeStr;
+            
+            // Определяем день недели
+            const dayIndex = (now.getDay() + 6) % 7; // ПН=0, ВТ=1, ... ВС=6
+            const dayKey = DAYS[dayIndex];
+            
+            // Если воскресенье или данных нет
+            if (dayIndex >= 6 || !scheduleData[dayKey]) {
+                document.getElementById('statusDisplay').textContent = 'ВЫХОДНОЙ';
+                document.getElementById('subjectDisplay').textContent = 'Нет занятий';
+                document.getElementById('metaDisplay').textContent = '';
+                document.getElementById('timerDisplay').textContent = '---';
+                document.getElementById('timerDisplay').className = 'timer normal';
+                document.getElementById('nextDisplay').textContent = '';
+                return;
+            }
+            
+            const lessons = scheduleData[dayKey];
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            
+            let foundLesson = null;
+            let foundIndex = -1;
+            let isBreak = false;
+            
+            // Ищем урок или перемену
+            for (let i = 0; i < lessons.length; i++) {
+                const lesson = lessons[i];
+                if (!lesson.start || !lesson.end || !lesson.subject) continue;
+                
+                const startParts = lesson.start.split(':');
+                const endParts = lesson.end.split(':');
+                const startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+                const endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+                
+                if (currentMinutes >= startMin && currentMinutes < endMin) {
+                    foundLesson = lesson;
+                    foundIndex = i;
+                    isBreak = false;
+                    break;
+                } else if (currentMinutes < startMin && (foundIndex === -1 || foundIndex > i)) {
+                    // Перемена перед уроком
+                    if (!foundLesson) {
+                        foundLesson = lesson;
+                        foundIndex = i;
+                        isBreak = true;
+                    }
+                }
+            }
+            
+            const statusEl = document.getElementById('statusDisplay');
+            const subjectEl = document.getElementById('subjectDisplay');
+            const metaEl = document.getElementById('metaDisplay');
+            const timerEl = document.getElementById('timerDisplay');
+            const nextEl = document.getElementById('nextDisplay');
+            
+            if (foundLesson) {
+                const startParts = foundLesson.start.split(':');
+                const endParts = foundLesson.end.split(':');
+                const startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+                const endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+                
+                if (isBreak) {
+                    // Перемена
+                    const timeLeft = startMin - currentMinutes;
+                    const min = Math.floor(timeLeft / 60);
+                    const sec = Math.round((timeLeft - min * 60));
+                    statusEl.textContent = '🔔 ПЕРЕМЕНА';
+                    subjectEl.textContent = 'Следующий урок';
+                    metaEl.innerHTML = `<strong>${foundLesson.subject}</strong> | ${foundLesson.group} | ${foundLesson.teacher}`;
+                    timerEl.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+                    timerEl.className = 'timer break-timer';
+                    
+                    // Ищем следующий после этого
+                    const nextLesson = lessons[foundIndex + 1];
+                    if (nextLesson && nextLesson.subject) {
+                        nextEl.innerHTML = '📚 После: <strong>' + nextLesson.subject + '</strong> (' + nextLesson.start + ' - ' + nextLesson.end + ')';
+                    } else {
+                        nextEl.textContent = '📚 Последний урок';
+                    }
+                } else {
+                    // Идёт урок
+                    const timeLeft = endMin - currentMinutes;
+                    const min = Math.floor(timeLeft / 60);
+                    const sec = Math.round((timeLeft - min * 60));
+                    statusEl.textContent = '📖 ИДЁТ УРОК';
+                    subjectEl.textContent = foundLesson.subject;
+                    metaEl.innerHTML = `${foundLesson.group} | ${foundLesson.teacher}`;
+                    timerEl.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+                    
+                    // Меняем цвет если меньше 5 минут
+                    if (timeLeft <= 5) {
+                        timerEl.className = 'timer urgent';
+                    } else {
+                        timerEl.className = 'timer normal';
+                    }
+                    
+                    // Следующий урок
+                    const nextLesson = lessons[foundIndex + 1];
+                    if (nextLesson && nextLesson.subject) {
+                        nextEl.innerHTML = '📚 Далее: <strong>' + nextLesson.subject + '</strong> (' + nextLesson.start + ')';
+                    } else {
+                        nextEl.textContent = '📚 Последний урок на сегодня';
+                    }
+                }
+            } else {
+                // Нет уроков
+                statusEl.textContent = '🏠 СВОБОДНО';
+                subjectEl.textContent = 'Нет текущих занятий';
+                metaEl.textContent = '';
+                timerEl.textContent = '---';
+                timerEl.className = 'timer normal';
+                nextEl.textContent = '';
+            }
+        }
+
+        // ============ ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ============
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (tabName === 'display') {
+                document.querySelector('.tab-btn:first-child').classList.add('active');
+                document.getElementById('tab-display').classList.add('active');
+            } else {
+                document.querySelector('.tab-btn:last-child').classList.add('active');
+                document.getElementById('tab-settings').classList.add('active');
+                renderTable();
+            }
+        }
+
+        // ============ ПОЛНЫЙ ЭКРАН ============
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // ============ ЗАПУСК ============
+        init();
+    </script>
+</body>
+</html>
